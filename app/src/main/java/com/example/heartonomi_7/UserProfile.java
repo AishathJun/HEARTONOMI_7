@@ -84,7 +84,6 @@ public class UserProfile extends AppCompatActivity {
         for (final Patient myRealmObject : realmObjects) {
             if (s1.equals(myRealmObject.getUsername())) {
                 editName.setText(myRealmObject.getName());
-                viewChart();
                 btn_Submit = findViewById(R.id.btnSubmit);
                 btn_Submit.setOnClickListener(new View.OnClickListener(){
                     @Override
@@ -105,7 +104,7 @@ public class UserProfile extends AppCompatActivity {
                             predictBloodPressureRequest.setDiastolic(Integer.parseInt(diaBP.getText().toString()));
                             predictBloodPressureRequest.setHeartRate(Integer.parseInt(heartRate.getText().toString()));
                             predictBloodPressureRequest.setReadingTime(datetime);
-                            //createPredictedBP(predictBloodPressureRequest);
+                            createPredictedBP(predictBloodPressureRequest);
                         }
                     }
                 });
@@ -226,8 +225,8 @@ public class UserProfile extends AppCompatActivity {
                     Log.v("Look here", String.valueOf(systolicP));
                     Toast.makeText(UserProfile.this, mes, Toast.LENGTH_LONG).show();
 
-//                    predSys = systolicP;
-//                    predDia = diastolicP;
+                    predSys = systolicP;
+                    predDia = diastolicP;
 
 //                for (PredictBloodPressureResponse user : predictBloodPressureResponses) {
 //                    int systolicP = user.getDiastolic();
@@ -260,7 +259,7 @@ public class UserProfile extends AppCompatActivity {
             @Override
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
                 Toast.makeText(UserProfile.this, response.message(), Toast.LENGTH_LONG).show();
-                viewChart();
+
             }
 
             @Override
@@ -319,7 +318,7 @@ public class UserProfile extends AppCompatActivity {
                 xAxis2.setValueFormatter(new MyAxisValueFormatter());
 
                 ArrayList<Entry> diastolic = new ArrayList<Entry>();
-                ArrayList<Entry> predictedD = new ArrayList<Entry>();
+//                ArrayList<Entry> predictedD = new ArrayList<Entry>();
 
                 int hour2 = 0;
 
@@ -330,14 +329,14 @@ public class UserProfile extends AppCompatActivity {
                     }
                 }
 
-                //predictedD.add(new Entry(hour2++, predDia));
+//                predictedD.add(new Entry(hour2++, predDia));
 
                 LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
-               // LineDataSet lineDataSet22 = new LineDataSet(predictedD, "Predicted Diastolic");
+//                LineDataSet lineDataSet22 = new LineDataSet(predictedD, "Predicted Diastolic");
 
                 ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
                 dataSets2.add(lineDataSet2);
-                //dataSets2.add(lineDataSet22);
+//                dataSets2.add(lineDataSet22);
 
                 LineData data2 = new LineData(dataSets2);
                 mChart2.setData(data2);

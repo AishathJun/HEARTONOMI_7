@@ -109,11 +109,13 @@ public class LoginActivity extends AppCompatActivity {
                             String password = loginRequest.getPassword();
                             if(user.getUsername().equals(username) && user.getPassword().equals(password)){
                                 startActivity(new Intent(LoginActivity.this,UserProfile.class).putExtra("username",username));
+                            finish();
+                            break;
                             }else{
                                 Toast.makeText(LoginActivity.this, "Username/password incorrect", Toast.LENGTH_LONG).show();
                             }
                     }
-                    finish();
+                    //finish();
                 }else{
                     String message = "Error has occured";
                     Toast.makeText(LoginActivity.this, message, Toast.LENGTH_LONG).show();
