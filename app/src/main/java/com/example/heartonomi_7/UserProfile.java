@@ -227,7 +227,6 @@ public class UserProfile extends AppCompatActivity {
 
                     predSys = systolicP;
                     predDia = diastolicP;
-
 //                for (PredictBloodPressureResponse user : predictBloodPressureResponses) {
 //                    int systolicP = user.getDiastolic();
 //                    int diastolicP = user.getSystolic();
@@ -258,8 +257,7 @@ public class UserProfile extends AppCompatActivity {
         call.enqueue(new Callback<BloodPressureAPI>() {
             @Override
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
-                Toast.makeText(UserProfile.this, response.message(), Toast.LENGTH_LONG).show();
-
+                Toast.makeText(UserProfile.this, "Sent", Toast.LENGTH_LONG).show();
             }
 
             @Override
@@ -375,4 +373,83 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
+    private void displayChart(){
+        Call<List<BloodPressureAPI>> call = jsonPlaceHolderApiBP.getBP();
+        call.enqueue(new Callback<List<BloodPressureAPI>>() {
+            @Override
+            public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {
+                mChart.setDragEnabled(true);
+                mChart.setScaleEnabled(false);
+                mChart.invalidate();
+
+                XAxis xAxis = mChart.getXAxis();
+                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis.setLabelRotationAngle(90);
+                xAxis.setValueFormatter(new MyAxisValueFormatter());
+
+                mChart2.setDragEnabled(true);
+                mChart2.setScaleEnabled(false);
+                mChart2.invalidate();
+
+                XAxis xAxis2 = mChart2.getXAxis();
+                xAxis2.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis2.setLabelRotationAngle(90);
+                xAxis2.setValueFormatter(new MyAxisValueFormatter());
+
+                mChart3.setDragEnabled(true);
+                mChart3.setScaleEnabled(false);
+                mChart3.invalidate();
+
+                XAxis xAxis3 = mChart3.getXAxis();
+                xAxis3.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis3.setLabelRotationAngle(90);
+                xAxis3.setValueFormatter(new MyAxisValueFormatter());
+
+                ArrayList<Entry> systolic = new ArrayList<Entry>();
+                ArrayList<Entry> diastolic = new ArrayList<Entry>();
+                ArrayList<Entry> blood_pressure = new ArrayList<Entry>();
+
+                int hour1 = 0;
+                List<BloodPressureAPI> bloodPressureList =  response.body();
+
+                for(BloodPressureAPI bloodPressure : bloodPressureList){
+                    if(bloodPressure.getUserName().equals(s1)){
+                        systolic.add(new Entry(hour1++, bloodPressure.getSystolic()));
+                        diastolic.add(new Entry(hour1++, bloodPressure.getDiastolic()));
+                        blood_pressure.add(new Entry(bloodPressure.getDiastolic(),bloodPressure.getSystolic()));
+                    }
+                }
+
+                LineDataSet lineDataSet = new LineDataSet(systolic, "Current Systolic");
+                ArrayList<ILineDataSet> dataSets = new ArrayList<>();
+                dataSets.add(lineDataSet);
+
+                LineData data = new LineData(dataSets);
+                mChart.setData(data);
+                mChart.invalidate();
+
+                LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
+                ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
+                dataSets2.add(lineDataSet2);
+
+                LineData data2 = new LineData(dataSets2);
+                mChart2.setData(data2);
+                mChart2.invalidate();
+
+                LineDataSet lineDataSet3 = new LineDataSet(blood_pressure, "Current Blood Pressure");
+                ArrayList<ILineDataSet> dataSets3 = new ArrayList<>();
+                dataSets3.add(lineDataSet3);
+
+                LineData data3 = new LineData(dataSets3);
+                mChart3.setData(data3);
+                mChart3.invalidate();
+            }
+
+            @Override
+            public void onFailure(Call<List<BloodPressureAPI>> call, Throwable t) {
+                String message = "Error: "+ t.getMessage();
+                Toast.makeText(UserProfile.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
 }
