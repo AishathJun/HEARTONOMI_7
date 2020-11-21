@@ -15,7 +15,7 @@ public class ApiClient {
         OkHttpClient okHttpClient = new OkHttpClient.Builder().addInterceptor(httpLoggingInterceptor).build();
 
         Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://192.168.0.180:8000/api/") //insert the API URL here
+                .baseUrl("http://192.168.0.145:8000/api/") //insert the API URL here
                 .addConverterFactory(GsonConverterFactory.create())
                 .client(okHttpClient)
                 .build();
