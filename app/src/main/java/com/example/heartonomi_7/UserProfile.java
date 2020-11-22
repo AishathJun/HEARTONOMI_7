@@ -1,14 +1,10 @@
 package com.example.heartonomi_7;
 
-import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
-import android.nfc.Tag;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -41,39 +37,31 @@ import io.realm.RealmResults;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 public class UserProfile extends AppCompatActivity {
     private LineChart mChart, mChart2, mChart3;
     private Realm realm;
-    private Patient currentPatient;
     Button btn_Logout, btn_Submit;
-    TextView labelUsername, labelFullname;
+    TextView editUsername, editName;
     EditText sysBP, diaBP, heartRate;
     LoginResponse loginResponse;
-    //String usernameString;
-
-    List<BloodPressureAPI> userBloodPressure;  //blood pressure data belonging to the user
-    List<BloodPressureAPI> userBloodPressurePrediction; //predicted data belonging to the user
-    private int numPredictions = 1; //set this to the number of predictions you want to display.
-
+    String s1;
 
     int predSys, predDia;
-    private JsonPlaceHolderApiBP bpService;
+    private JsonPlaceHolderApiBP jsonPlaceHolderApiBP;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.user_profile_page);
 
-        //module variable
-        userBloodPressure = new ArrayList<>();
-        userBloodPressurePrediction = new ArrayList<>();
-
         mChart = (LineChart) findViewById(R.id.Linechart);
         mChart2 = (LineChart) findViewById(R.id.Linechart2);
         mChart3 = (LineChart) findViewById(R.id.Linechart3);
 
-        labelUsername = findViewById(R.id.u_username);  //renamed it from editUsername
-        labelFullname = findViewById(R.id.fname);       //renamed this one
+        editUsername = findViewById(R.id.u_username);
+        editName = findViewById(R.id.fname);
         btn_Submit = findViewById(R.id.btnSubmit);
         btn_Logout = findViewById(R.id.btnlogout);
 
@@ -81,287 +69,47 @@ public class UserProfile extends AppCompatActivity {
         diaBP = findViewById(R.id.diastolic);
         heartRate = findViewById(R.id.heartrate);
 
-        //replace these lines with...
-//        Retrofit retrofit = new Retrofit.Builder()
-//                .baseUrl("http://192.168.0.180:8000/api/")
-//                .addConverterFactory(GsonConverterFactory.create())
-//                .build();
-//        jsonPlaceHolderApiBP = retrofit.create(JsonPlaceHolderApiBP.class);
-        //this. it does the same thing
-        bpService = ApiClient.getBPService(); //renamed jsonPlaceholdeApiBP to bpService.
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("http://192.168.0.180:8080/api/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+        jsonPlaceHolderApiBP = retrofit.create(JsonPlaceHolderApiBP.class);
 
-        //fetch the all the user data from the login activity. We dont need realm.
         Intent i = getIntent();
-        final String usernameString;
-        usernameString =  i.getStringExtra("username");
-        String name = i.getStringExtra("name");
-        String password = i.getStringExtra("password");
-        String height = i.getStringExtra("height");
-        String weight= i.getStringExtra("weight");
+        s1 =  i.getStringExtra("username");
+        editUsername.setText(s1);
 
-        currentPatient = new Patient(name, usernameString, password, weight, height);
+        realm = Realm.getDefaultInstance();
+        RealmResults<Patient> realmObjects = realm.where(Patient.class).findAll();
+        for (final Patient myRealmObject : realmObjects) {
+            if (s1.equals(myRealmObject.getUsername())) {
+                editName.setText(myRealmObject.getName());
+                btn_Submit = findViewById(R.id.btnSubmit);
+                btn_Submit.setOnClickListener(new View.OnClickListener(){
+                    @Override
+                    public void onClick(View view) {
+                        if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
+                            Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
+                        }else{
+                            //addBloodpress(myRealmObject);
+                            createBP();
+                            Date c = Calendar.getInstance().getTime();
+                            final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+                            String datetime = dateformat.format(c.getTime());
 
+                            PredictBloodPressureRequest predictBloodPressureRequest = new PredictBloodPressureRequest();
 
-        //Set the text data for UI
-        labelUsername.setText(usernameString);
-        labelFullname.setText(currentPatient.getName());
-
-
-        btn_Submit.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
-                        Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
-                    }else{
-                        //success!!
-                        hideKeyboard(); //hide the annoying keyboard.
-
-                        createBP(usernameString);
-                        //viewChart();
+                            predictBloodPressureRequest.setUserName(editUsername.getText().toString());
+                            predictBloodPressureRequest.setSystolic(Integer.parseInt(sysBP.getText().toString()));
+                            predictBloodPressureRequest.setDiastolic(Integer.parseInt(diaBP.getText().toString()));
+                            predictBloodPressureRequest.setHeartRate(Integer.parseInt(heartRate.getText().toString()));
+                            predictBloodPressureRequest.setReadingTime(datetime);
+                            createPredictedBP(predictBloodPressureRequest);
+                        }
                     }
-                }
-            });
-
-
-
-
-//        for (final Patient myRealmObject : realmObjects) {
-//            if (s1.equals(myRealmObject.getUsername())) {
-//                editName.setText(myRealmObject.getName());
-//                btn_Submit = findViewById(R.id.btnSubmit);
-//                btn_Submit.setOnClickListener(new View.OnClickListener(){
-//                    @Override
-//                    public void onClick(View view) {
-//                        if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
-//                            Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
-//                        }else{
-//                            //addBloodpress(myRealmObject);
-//                            createBP();
-//                            viewChart();
-//                            Date c = Calendar.getInstance().getTime();
-//                            final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-//                            String datetime = dateformat.format(c.getTime());
-//
-//                            PredictBloodPressureRequest predictBloodPressureRequest = new PredictBloodPressureRequest();
-//
-//                            predictBloodPressureRequest.setUserName(editUsername.getText().toString());
-//                            predictBloodPressureRequest.setSystolic(Integer.parseInt(sysBP.getText().toString()));
-//                            predictBloodPressureRequest.setDiastolic(Integer.parseInt(diaBP.getText().toString()));
-//                            predictBloodPressureRequest.setHeartRate(Integer.parseInt(heartRate.getText().toString()));
-//                            predictBloodPressureRequest.setReadingTime(datetime);
-//                            createPredictedBP(predictBloodPressureRequest);
-//                        }
-//                    }
-//                });
-//            }
-//        }
-    }
-
-    //hide keyboard to fix that annoying issue with keyboard still visible after submit
-    private void hideKeyboard(){
-        Context context = this.getApplicationContext();
-        InputMethodManager inputManager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
-        inputManager.hideSoftInputFromWindow(this.getCurrentFocus().getWindowToken(),InputMethodManager.HIDE_NOT_ALWAYS);
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        fetchPatientBloodPressure(currentPatient.getUsername());
-        //fetchPatientPredictions(currentPatient.getUsername(), numPredictions);
-        //Ask server for list of blood pressure and process them once received.
-
-    }
-
-
-    /***
-     * Fetches the last blood predictions of the given user
-     * @param username Username Identifier
-     * @param numPredictions Number of predictions to make
-     */
-    void fetchPatientPredictions(final String username, final int numPredictions){
-        if(userBloodPressure.size() == 0)  // No need to run this method if there is no userblood pressure recorded.
-            return;
-
-        //Fetch the last blood pressure item in order to make prediction
-        final BloodPressureAPI lastBloodPressureItem = userBloodPressure.get(userBloodPressure.size()-1);
-
-        //prepare the http body
-        final PredictBloodPressureRequest predictBloodPressureRequest = new PredictBloodPressureRequest();
-        predictBloodPressureRequest.setUserName(currentPatient.getUsername());
-        predictBloodPressureRequest.setSystolic(lastBloodPressureItem.getSystolic());
-        predictBloodPressureRequest.setDiastolic(lastBloodPressureItem.getDiastolic());
-        predictBloodPressureRequest.setHeartRate(lastBloodPressureItem.getHeartRate());
-        predictBloodPressureRequest.setReadingTime(lastBloodPressureItem.getReadingTime());
-        createPredictedBP(predictBloodPressureRequest);
-
-        userBloodPressurePrediction.clear();
-        //make the api call to the server. Add the prediction data the module variable
-        final Call<PredictBloodPressureResponse> predictBloodPressureRequestCall = bpService.displayPredict(predictBloodPressureRequest);
-        predictBloodPressureRequestCall.enqueue(new Callback<PredictBloodPressureResponse>() {
-            @Override
-            public void onResponse(Call<PredictBloodPressureResponse> call, Response<PredictBloodPressureResponse> response) {
-                PredictBloodPressureResponse pr = response.body();
-                //convert between the types
-                BloodPressureAPI predictedBP = new BloodPressureAPI(
-                        currentPatient.getUsername(),
-                        pr.getSystolic(),
-                        pr.getDiastolic(),
-                        lastBloodPressureItem.getHeartRate(),
-                        predictBloodPressureRequest.getReadingTime()    //TODO We definitely need to add one hour to this
-                        );
-                userBloodPressurePrediction.add(predictedBP);
-                renderCharts();
-            }
-
-            @Override
-            public void onFailure(Call<PredictBloodPressureResponse> call, Throwable t) {
-                Log.e("UserProfile", "Cannot fetch predictions");
-            }
-        });
-    }
-
-    /***
-     * Returns the current datetime as a string.
-     * I saw this code being reused so I put it here.
-     */
-    String getCurrentTime(){
-        return strAddHoursToCurrentTime(0);
-    }
-
-    /***
-     * Returns the current datetime as a string after adding hours
-     * I saw this code being reused so I put it here.
-     */
-    String strAddHoursToCurrentTime(int val){
-        Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.HOUR, val);
-        Date c = cal.getTime();
-        SimpleDateFormat dateformat = new SimpleDateFormat("dd-MMM-yyyy hh:mm:ss aa");
-        String datetime = dateformat.format(c.getTime());
-        return datetime;
-    }
-
-
-    /**
-     * Ask the server for a list of blood pressure and adds the blood pressure data
-     * belongin to patient in the module variable 'userBloodPressure'
-     * @param username
-     */
-    void fetchPatientBloodPressure(final String username){
-        bpService.getBP().enqueue(new Callback<List<BloodPressureAPI>>() {
-            @Override
-            public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {
-                List<BloodPressureAPI> bloodPressureList = response.body();
-                //List<BloodPressureAPI> userBloodPressure; //BP readings belonging to the user
-
-                //clear the module variable that stores blood pressure objects
-                userBloodPressure.clear();
-
-                //We search through the blood pressure list and add the blood pressure belonging to the user to module list
-                for(BloodPressureAPI bp : bloodPressureList){
-                    if(bp.getUserName().equals(username)){
-                        userBloodPressure.add(bp);
-                    }
-                }
-
-                fetchPatientPredictions(username, numPredictions);
-                renderCharts();
-                Log.v("server list size", "="+ bloodPressureList.size());
-            }
-
-            @Override
-            public void onFailure(Call<List<BloodPressureAPI>> call, Throwable t) {
-
-            }
-        });
-    }
-
-    void renderCharts(){
-        drawChart(mChart, "Systolic");
-        drawChart(mChart2, "Diastolic");
-        drawChart(mChart2, "HeartRate");
-    }
-
-    void drawChart(LineChart chart, String chartLabel){
-        LineData chartData = new LineData();
-        chart.setDragEnabled(true);
-        chart.setScaleEnabled(false);
-        chart.invalidate();
-
-        XAxis xAxis = chart.getXAxis();
-        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-        xAxis.setLabelRotationAngle(90);
-        xAxis.setValueFormatter(new MyAxisValueFormatter());
-
-
-
-        //plot the current charts
-        ArrayList<Entry> systolic = new ArrayList<Entry>();
-        int hour1 = 0;
-        for(BloodPressureAPI bloodPressure : userBloodPressure){
-            int yval = bloodPressure.getDiastolic();
-            if(chartLabel.equals("Systolic"))
-                yval = bloodPressure.getSystolic();
-            if(chartLabel.equals("HeartRate"))
-                yval = bloodPressure.getHeartRate();
-
-            systolic.add(new Entry(hour1++, yval ));
-        }
-
-        LineDataSet lineDataSet1 = new LineDataSet(systolic, "Current "+chartLabel);
-        lineDataSet1.setFillAlpha(65);
-        lineDataSet1.setFillColor(Color.BLUE);
-        lineDataSet1.setColor(Color.BLACK);
-        lineDataSet1.setCircleColor(Color.BLUE);
-        //lineDataSet1.setCircleColorHole(Color.BLUE);
-        lineDataSet1.setLineWidth(2f);
-        lineDataSet1.setCircleSize(5f);
-        lineDataSet1.setDrawValues(false);
-
-        lineDataSet1.setDrawCircleHole(false);
-        //ArrayList<ILineDataSet> dataSets = new ArrayList<>();
-        //dataSets.add(lineDataSet1);
-        chartData.addDataSet(lineDataSet1);
-
-        if(!chartLabel.equals("HeartRate")) {  //because heartrate doesnt have predictions
-            hour1 = 0;
-            //plot the predictions
-            ArrayList<Entry> dataPreds = new ArrayList<>();
-            for(BloodPressureAPI bloodPressure : userBloodPressurePrediction){
-                int yval = bloodPressure.getDiastolic();
-                if(chartLabel.equals("Systolic"))
-                    yval = bloodPressure.getSystolic();
-                dataPreds.add(new Entry(userBloodPressure.size()+hour1++, yval ));
-            }
-
-            LineDataSet predictionDataset = new LineDataSet(dataPreds, "Predictions "+chartLabel);
-            predictionDataset.setColor(Color.RED);
-            lineDataSet1.setCircleColor(Color.RED);
-            predictionDataset.setFillColor(Color.RED);
-            predictionDataset.setDrawCircleHole(true);
-            chartData.addDataSet(predictionDataset);
-
-        }
-
-        chart.setData(chartData);
-
-        chart.invalidate();
-    }
-
-    /**
-     * Find a patient from a list of patients by username
-     * @param realmObjects
-     * @param usernameString
-     * @return
-     */
-    private Patient findPatient(RealmResults<Patient> realmObjects, String usernameString) {
-        for(Patient patient: realmObjects){
-            if(patient.getUsername().equals(usernameString)){
-                return patient; //patient found
+                });
             }
         }
-        return null; //patient not found
     }
 
     public void addBloodpress(Patient myRealmObject){
@@ -465,7 +213,7 @@ public class UserProfile extends AppCompatActivity {
     }
 
     private void createPredictedBP(final PredictBloodPressureRequest predictBloodPressureRequest){
-        final Call<PredictBloodPressureResponse> predictBloodPressureRequestCall = bpService.displayPredict(predictBloodPressureRequest);
+        final Call<PredictBloodPressureResponse> predictBloodPressureRequestCall = jsonPlaceHolderApiBP.displayPredict(predictBloodPressureRequest);
         predictBloodPressureRequestCall.enqueue(new Callback<PredictBloodPressureResponse>() {
             @Override
             public void onResponse(Call<PredictBloodPressureResponse> call, Response<PredictBloodPressureResponse> response) {
@@ -479,7 +227,6 @@ public class UserProfile extends AppCompatActivity {
 
                     predSys = systolicP;
                     predDia = diastolicP;
-
 //                for (PredictBloodPressureResponse user : predictBloodPressureResponses) {
 //                    int systolicP = user.getDiastolic();
 //                    int diastolicP = user.getSystolic();
@@ -496,24 +243,21 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
-    private void createBP(final String usernameString){
+    private void createBP(){
         Date c = Calendar.getInstance().getTime();
         final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         String datetime = dateformat.format(c.getTime());
 
-        final BloodPressureAPI post = new BloodPressureAPI(usernameString,
+        final BloodPressureAPI post = new BloodPressureAPI( s1,
                                                             Integer.parseInt(sysBP.getText().toString()),
                                                             Integer.parseInt(diaBP.getText().toString()),
                                                             Integer.parseInt(heartRate.getText().toString()),
                                                             datetime);
-
-        Call<BloodPressureAPI> call = bpService.createBP(post);
+        Call<BloodPressureAPI> call = jsonPlaceHolderApiBP.createBP(post);
         call.enqueue(new Callback<BloodPressureAPI>() {
             @Override
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
-                Toast.makeText(UserProfile.this, response.message(), Toast.LENGTH_LONG).show();
-                //viewChart();
-                fetchPatientBloodPressure(usernameString);
+                Toast.makeText(UserProfile.this, "Sent", Toast.LENGTH_LONG).show();
             }
 
             @Override
@@ -523,8 +267,8 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
-    private void viewChart(String usernameString){
-        Call<List<BloodPressureAPI>> call = bpService.getBP();
+    private void viewChart(){
+        Call<List<BloodPressureAPI>> call = jsonPlaceHolderApiBP.getBP();
         call.enqueue(new Callback<List<BloodPressureAPI>>() {
             @Override
             public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {
@@ -548,9 +292,9 @@ public class UserProfile extends AppCompatActivity {
                 List<BloodPressureAPI> bloodPressureList =  response.body();
 
                 for(BloodPressureAPI bloodPressure : bloodPressureList){
-                   // if(bloodPressure.getUserName().equals(usernameString)){
-                    //    systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
-                   // }
+                    if(bloodPressure.getUserName().equals(s1)){
+                        systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
+                    }
                 }
 
                 LineDataSet lineDataSet1 = new LineDataSet(systolic, "Current Systolic");
@@ -560,66 +304,66 @@ public class UserProfile extends AppCompatActivity {
                 LineData data = new LineData(dataSets);
                 mChart.setData(data);
                 mChart.invalidate();
-//
-//                //--------------DIASTOLIC------------------
-//                mChart2.setDragEnabled(true);
-//                mChart2.setScaleEnabled(false);
-//                mChart2.invalidate();
-//
-//                XAxis xAxis2 = mChart2.getXAxis();
-//                xAxis2.setPosition(XAxis.XAxisPosition.BOTTOM);
-//                xAxis2.setLabelRotationAngle(90);
-//                xAxis2.setValueFormatter(new MyAxisValueFormatter());
-//
-//                ArrayList<Entry> diastolic = new ArrayList<Entry>();
-////                ArrayList<Entry> predictedD = new ArrayList<Entry>();
-//
-//                int hour2 = 0;
-//
-//                List<BloodPressureAPI> bloodPressureList2 =  response.body();
-//                for(BloodPressureAPI bloodPressure : bloodPressureList2){
-//                    if(bloodPressure.getUserName().equals(s1)){
-//                        diastolic.add(new Entry(hour2++, bloodPressure.getDiastolic() ));
-//                    }
-//                }
-//
-////                predictedD.add(new Entry(hour2++, predDia));
-//
-//                LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
-////                LineDataSet lineDataSet22 = new LineDataSet(predictedD, "Predicted Diastolic");
-//
-//                ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
-//                dataSets2.add(lineDataSet2);
-////                dataSets2.add(lineDataSet22);
-//
-//                LineData data2 = new LineData(dataSets2);
-//                mChart2.setData(data2);
-//                mChart2.invalidate();
-//                //--------------------------------
-//                mChart3.setDragEnabled(true);
-//                mChart3.setScaleEnabled(false);
-//                mChart3.invalidate();
-//
-//                XAxis xAxis3 = mChart3.getXAxis();
-//                xAxis3.setPosition(XAxis.XAxisPosition.BOTTOM);
-//
-//                ArrayList<Entry> bloodp = new ArrayList<Entry>();
-//
-//                List<BloodPressureAPI> bloodPressureList3 =  response.body();
-//
-//                for(BloodPressureAPI bloodPressure : bloodPressureList3){
-//                    if(bloodPressure.getUserName().equals(s1)){
-//                        bloodp.add(new Entry(bloodPressure.getDiastolic(),bloodPressure.getSystolic() ));
-//                    }
-//                }
-//
-//                LineDataSet lineDataSet3 = new LineDataSet(bloodp, "Current Blood Pressure");
-//                ArrayList<ILineDataSet> dataSets3 = new ArrayList<>();
-//                dataSets3.add(lineDataSet3);
-//
-//                LineData data3 = new LineData(dataSets3);
-//                mChart3.setData(data3);
-//                mChart3.invalidate();
+
+                //--------------DIASTOLIC------------------
+                mChart2.setDragEnabled(true);
+                mChart2.setScaleEnabled(false);
+                mChart2.invalidate();
+
+                XAxis xAxis2 = mChart2.getXAxis();
+                xAxis2.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis2.setLabelRotationAngle(90);
+                xAxis2.setValueFormatter(new MyAxisValueFormatter());
+
+                ArrayList<Entry> diastolic = new ArrayList<Entry>();
+//                ArrayList<Entry> predictedD = new ArrayList<Entry>();
+
+                int hour2 = 0;
+
+                List<BloodPressureAPI> bloodPressureList2 =  response.body();
+                for(BloodPressureAPI bloodPressure : bloodPressureList2){
+                    if(bloodPressure.getUserName().equals(s1)){
+                        diastolic.add(new Entry(hour2++, bloodPressure.getDiastolic() ));
+                    }
+                }
+
+//                predictedD.add(new Entry(hour2++, predDia));
+
+                LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
+//                LineDataSet lineDataSet22 = new LineDataSet(predictedD, "Predicted Diastolic");
+
+                ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
+                dataSets2.add(lineDataSet2);
+//                dataSets2.add(lineDataSet22);
+
+                LineData data2 = new LineData(dataSets2);
+                mChart2.setData(data2);
+                mChart2.invalidate();
+                //--------------------------------
+                mChart3.setDragEnabled(true);
+                mChart3.setScaleEnabled(false);
+                mChart3.invalidate();
+
+                XAxis xAxis3 = mChart3.getXAxis();
+                xAxis3.setPosition(XAxis.XAxisPosition.BOTTOM);
+
+                ArrayList<Entry> bloodp = new ArrayList<Entry>();
+
+                List<BloodPressureAPI> bloodPressureList3 =  response.body();
+
+                for(BloodPressureAPI bloodPressure : bloodPressureList3){
+                    if(bloodPressure.getUserName().equals(s1)){
+                        bloodp.add(new Entry(bloodPressure.getDiastolic(),bloodPressure.getSystolic() ));
+                    }
+                }
+
+                LineDataSet lineDataSet3 = new LineDataSet(bloodp, "Current Blood Pressure");
+                ArrayList<ILineDataSet> dataSets3 = new ArrayList<>();
+                dataSets3.add(lineDataSet3);
+
+                LineData data3 = new LineData(dataSets3);
+                mChart3.setData(data3);
+                mChart3.invalidate();
             }
 
             @Override
@@ -629,4 +373,83 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
+    private void displayChart(){
+        Call<List<BloodPressureAPI>> call = jsonPlaceHolderApiBP.getBP();
+        call.enqueue(new Callback<List<BloodPressureAPI>>() {
+            @Override
+            public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {
+                mChart.setDragEnabled(true);
+                mChart.setScaleEnabled(false);
+                mChart.invalidate();
+
+                XAxis xAxis = mChart.getXAxis();
+                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis.setLabelRotationAngle(90);
+                xAxis.setValueFormatter(new MyAxisValueFormatter());
+
+                mChart2.setDragEnabled(true);
+                mChart2.setScaleEnabled(false);
+                mChart2.invalidate();
+
+                XAxis xAxis2 = mChart2.getXAxis();
+                xAxis2.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis2.setLabelRotationAngle(90);
+                xAxis2.setValueFormatter(new MyAxisValueFormatter());
+
+                mChart3.setDragEnabled(true);
+                mChart3.setScaleEnabled(false);
+                mChart3.invalidate();
+
+                XAxis xAxis3 = mChart3.getXAxis();
+                xAxis3.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis3.setLabelRotationAngle(90);
+                xAxis3.setValueFormatter(new MyAxisValueFormatter());
+
+                ArrayList<Entry> systolic = new ArrayList<Entry>();
+                ArrayList<Entry> diastolic = new ArrayList<Entry>();
+                ArrayList<Entry> blood_pressure = new ArrayList<Entry>();
+
+                int hour1 = 0;
+                List<BloodPressureAPI> bloodPressureList =  response.body();
+
+                for(BloodPressureAPI bloodPressure : bloodPressureList){
+                    if(bloodPressure.getUserName().equals(s1)){
+                        systolic.add(new Entry(hour1++, bloodPressure.getSystolic()));
+                        diastolic.add(new Entry(hour1++, bloodPressure.getDiastolic()));
+                        blood_pressure.add(new Entry(bloodPressure.getDiastolic(),bloodPressure.getSystolic()));
+                    }
+                }
+
+                LineDataSet lineDataSet = new LineDataSet(systolic, "Current Systolic");
+                ArrayList<ILineDataSet> dataSets = new ArrayList<>();
+                dataSets.add(lineDataSet);
+
+                LineData data = new LineData(dataSets);
+                mChart.setData(data);
+                mChart.invalidate();
+
+                LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
+                ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
+                dataSets2.add(lineDataSet2);
+
+                LineData data2 = new LineData(dataSets2);
+                mChart2.setData(data2);
+                mChart2.invalidate();
+
+                LineDataSet lineDataSet3 = new LineDataSet(blood_pressure, "Current Blood Pressure");
+                ArrayList<ILineDataSet> dataSets3 = new ArrayList<>();
+                dataSets3.add(lineDataSet3);
+
+                LineData data3 = new LineData(dataSets3);
+                mChart3.setData(data3);
+                mChart3.invalidate();
+            }
+
+            @Override
+            public void onFailure(Call<List<BloodPressureAPI>> call, Throwable t) {
+                String message = "Error: "+ t.getMessage();
+                Toast.makeText(UserProfile.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
 }
