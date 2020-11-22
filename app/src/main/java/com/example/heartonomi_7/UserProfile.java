@@ -2,6 +2,8 @@ package com.example.heartonomi_7;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.nfc.Tag;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
@@ -51,6 +53,9 @@ public class UserProfile extends AppCompatActivity {
     //String usernameString;
 
     List<BloodPressureAPI> userBloodPressure;  //blood pressure data belonging to the user
+    List<BloodPressureAPI> userBloodPressurePrediction; //predicted data belonging to the user
+    private int numPredictions = 1; //set this to the number of predictions you want to display.
+
 
     int predSys, predDia;
     private JsonPlaceHolderApiBP bpService;
@@ -61,6 +66,7 @@ public class UserProfile extends AppCompatActivity {
 
         //module variable
         userBloodPressure = new ArrayList<>();
+        userBloodPressurePrediction = new ArrayList<>();
 
         mChart = (LineChart) findViewById(R.id.Linechart);
         mChart2 = (LineChart) findViewById(R.id.Linechart2);
@@ -117,6 +123,8 @@ public class UserProfile extends AppCompatActivity {
             });
 
 
+
+
 //        for (final Patient myRealmObject : realmObjects) {
 //            if (s1.equals(myRealmObject.getUsername())) {
 //                editName.setText(myRealmObject.getName());
@@ -160,9 +168,78 @@ public class UserProfile extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         fetchPatientBloodPressure(currentPatient.getUsername());
-
+        //fetchPatientPredictions(currentPatient.getUsername(), numPredictions);
         //Ask server for list of blood pressure and process them once received.
 
+    }
+
+
+    /***
+     * Fetches the last blood predictions of the given user
+     * @param username Username Identifier
+     * @param numPredictions Number of predictions to make
+     */
+    void fetchPatientPredictions(final String username, final int numPredictions){
+        if(userBloodPressure.size() == 0)  // No need to run this method if there is no userblood pressure recorded.
+            return;
+
+        //Fetch the last blood pressure item in order to make prediction
+        final BloodPressureAPI lastBloodPressureItem = userBloodPressure.get(userBloodPressure.size()-1);
+
+        //prepare the http body
+        final PredictBloodPressureRequest predictBloodPressureRequest = new PredictBloodPressureRequest();
+        predictBloodPressureRequest.setUserName(currentPatient.getUsername());
+        predictBloodPressureRequest.setSystolic(lastBloodPressureItem.getSystolic());
+        predictBloodPressureRequest.setDiastolic(lastBloodPressureItem.getDiastolic());
+        predictBloodPressureRequest.setHeartRate(lastBloodPressureItem.getHeartRate());
+        predictBloodPressureRequest.setReadingTime(lastBloodPressureItem.getReadingTime());
+        createPredictedBP(predictBloodPressureRequest);
+
+        userBloodPressurePrediction.clear();
+        //make the api call to the server. Add the prediction data the module variable
+        final Call<PredictBloodPressureResponse> predictBloodPressureRequestCall = bpService.displayPredict(predictBloodPressureRequest);
+        predictBloodPressureRequestCall.enqueue(new Callback<PredictBloodPressureResponse>() {
+            @Override
+            public void onResponse(Call<PredictBloodPressureResponse> call, Response<PredictBloodPressureResponse> response) {
+                PredictBloodPressureResponse pr = response.body();
+                //convert between the types
+                BloodPressureAPI predictedBP = new BloodPressureAPI(
+                        currentPatient.getUsername(),
+                        pr.getSystolic(),
+                        pr.getDiastolic(),
+                        lastBloodPressureItem.getHeartRate(),
+                        predictBloodPressureRequest.getReadingTime()    //TODO We definitely need to add one hour to this
+                        );
+                userBloodPressurePrediction.add(predictedBP);
+                renderCharts();
+            }
+
+            @Override
+            public void onFailure(Call<PredictBloodPressureResponse> call, Throwable t) {
+                Log.e("UserProfile", "Cannot fetch predictions");
+            }
+        });
+    }
+
+    /***
+     * Returns the current datetime as a string.
+     * I saw this code being reused so I put it here.
+     */
+    String getCurrentTime(){
+        return strAddHoursToCurrentTime(0);
+    }
+
+    /***
+     * Returns the current datetime as a string after adding hours
+     * I saw this code being reused so I put it here.
+     */
+    String strAddHoursToCurrentTime(int val){
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.HOUR, val);
+        Date c = cal.getTime();
+        SimpleDateFormat dateformat = new SimpleDateFormat("dd-MMM-yyyy hh:mm:ss aa");
+        String datetime = dateformat.format(c.getTime());
+        return datetime;
     }
 
 
@@ -188,6 +265,7 @@ public class UserProfile extends AppCompatActivity {
                     }
                 }
 
+                fetchPatientPredictions(username, numPredictions);
                 renderCharts();
                 Log.v("server list size", "="+ bloodPressureList.size());
             }
@@ -200,10 +278,13 @@ public class UserProfile extends AppCompatActivity {
     }
 
     void renderCharts(){
-        drawChart(mChart, "Current Systolic");
+        drawChart(mChart, "Systolic");
+        drawChart(mChart2, "Diastolic");
+        drawChart(mChart2, "HeartRate");
     }
 
     void drawChart(LineChart chart, String chartLabel){
+        LineData chartData = new LineData();
         chart.setDragEnabled(true);
         chart.setScaleEnabled(false);
         chart.invalidate();
@@ -213,18 +294,58 @@ public class UserProfile extends AppCompatActivity {
         xAxis.setLabelRotationAngle(90);
         xAxis.setValueFormatter(new MyAxisValueFormatter());
 
+
+
+        //plot the current charts
         ArrayList<Entry> systolic = new ArrayList<Entry>();
         int hour1 = 0;
         for(BloodPressureAPI bloodPressure : userBloodPressure){
-            systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
+            int yval = bloodPressure.getDiastolic();
+            if(chartLabel.equals("Systolic"))
+                yval = bloodPressure.getSystolic();
+            if(chartLabel.equals("HeartRate"))
+                yval = bloodPressure.getHeartRate();
+
+            systolic.add(new Entry(hour1++, yval ));
         }
 
-        LineDataSet lineDataSet1 = new LineDataSet(systolic, chartLabel);
-        ArrayList<ILineDataSet> dataSets = new ArrayList<>();
-        dataSets.add(lineDataSet1);
+        LineDataSet lineDataSet1 = new LineDataSet(systolic, "Current "+chartLabel);
+        lineDataSet1.setFillAlpha(65);
+        lineDataSet1.setFillColor(Color.BLUE);
+        lineDataSet1.setColor(Color.BLACK);
+        lineDataSet1.setCircleColor(Color.BLUE);
+        //lineDataSet1.setCircleColorHole(Color.BLUE);
+        lineDataSet1.setLineWidth(2f);
+        lineDataSet1.setCircleSize(5f);
+        lineDataSet1.setDrawValues(false);
 
-        LineData data = new LineData(dataSets);
-        chart.setData(data);
+        lineDataSet1.setDrawCircleHole(false);
+        //ArrayList<ILineDataSet> dataSets = new ArrayList<>();
+        //dataSets.add(lineDataSet1);
+        chartData.addDataSet(lineDataSet1);
+
+        if(!chartLabel.equals("HeartRate")) {  //because heartrate doesnt have predictions
+            hour1 = 0;
+            //plot the predictions
+            ArrayList<Entry> dataPreds = new ArrayList<>();
+            for(BloodPressureAPI bloodPressure : userBloodPressurePrediction){
+                int yval = bloodPressure.getDiastolic();
+                if(chartLabel.equals("Systolic"))
+                    yval = bloodPressure.getSystolic();
+                dataPreds.add(new Entry(userBloodPressure.size()+hour1++, yval ));
+            }
+
+            LineDataSet predictionDataset = new LineDataSet(dataPreds, "Predictions "+chartLabel);
+            predictionDataset.setColor(Color.RED);
+            lineDataSet1.setCircleColor(Color.RED);
+            predictionDataset.setFillColor(Color.RED);
+            predictionDataset.setDrawCircleHole(true);
+            chartData.addDataSet(predictionDataset);
+
+        }
+
+        chart.setData(chartData);
+
         chart.invalidate();
     }
 
@@ -375,7 +496,7 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
-    private void createBP(String usernameString){
+    private void createBP(final String usernameString){
         Date c = Calendar.getInstance().getTime();
         final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         String datetime = dateformat.format(c.getTime());
@@ -392,6 +513,7 @@ public class UserProfile extends AppCompatActivity {
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
                 Toast.makeText(UserProfile.this, response.message(), Toast.LENGTH_LONG).show();
                 //viewChart();
+                fetchPatientBloodPressure(usernameString);
             }
 
             @Override
