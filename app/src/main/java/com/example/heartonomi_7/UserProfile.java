@@ -2,9 +2,7 @@ package com.example.heartonomi_7;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -43,11 +41,12 @@ import retrofit2.converter.gson.GsonConverterFactory;
 public class UserProfile extends AppCompatActivity {
     private LineChart mChart, mChart2, mChart3;
     private Realm realm;
+    private Patient currentPatient;
     Button btn_Logout, btn_Submit;
-    TextView editUsername, editName;
+    TextView editUsername, patientNameLabel;
     EditText sysBP, diaBP, heartRate;
     LoginResponse loginResponse;
-    String s1;
+    String usernameString;
 
     int predSys, predDia;
     private JsonPlaceHolderApiBP jsonPlaceHolderApiBP;
@@ -61,7 +60,7 @@ public class UserProfile extends AppCompatActivity {
         mChart3 = (LineChart) findViewById(R.id.Linechart3);
 
         editUsername = findViewById(R.id.u_username);
-        editName = findViewById(R.id.fname);
+        patientNameLabel = findViewById(R.id.fname);
         btn_Submit = findViewById(R.id.btnSubmit);
         btn_Logout = findViewById(R.id.btnlogout);
 
@@ -76,40 +75,55 @@ public class UserProfile extends AppCompatActivity {
         jsonPlaceHolderApiBP = retrofit.create(JsonPlaceHolderApiBP.class);
 
         Intent i = getIntent();
-        s1 =  i.getStringExtra("username");
-        editUsername.setText(s1);
+        usernameString =  i.getStringExtra("username");
+        editUsername.setText(usernameString);
 
         realm = Realm.getDefaultInstance();
         RealmResults<Patient> realmObjects = realm.where(Patient.class).findAll();
-        for (final Patient myRealmObject : realmObjects) {
-            if (s1.equals(myRealmObject.getUsername())) {
-                editName.setText(myRealmObject.getName());
-                btn_Submit = findViewById(R.id.btnSubmit);
-                btn_Submit.setOnClickListener(new View.OnClickListener(){
-                    @Override
-                    public void onClick(View view) {
-                        if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
-                            Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
-                        }else{
-                            //addBloodpress(myRealmObject);
-                            createBP();
-                            Date c = Calendar.getInstance().getTime();
-                            final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
-                            String datetime = dateformat.format(c.getTime());
+        currentPatient = findPatient(realmObjects, usernameString);
 
-                            PredictBloodPressureRequest predictBloodPressureRequest = new PredictBloodPressureRequest();
+        if(currentPatient != null){ //we found the patient in realm database
+            patientNameLabel.setText(currentPatient.getName());
+        }
+//        for (final Patient myRealmObject : realmObjects) {
+//            if (s1.equals(myRealmObject.getUsername())) {
+//                editName.setText(myRealmObject.getName());
+//                btn_Submit = findViewById(R.id.btnSubmit);
+//                btn_Submit.setOnClickListener(new View.OnClickListener(){
+//                    @Override
+//                    public void onClick(View view) {
+//                        if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
+//                            Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
+//                        }else{
+//                            //addBloodpress(myRealmObject);
+//                            createBP();
+//                            viewChart();
+//                            Date c = Calendar.getInstance().getTime();
+//                            final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+//                            String datetime = dateformat.format(c.getTime());
+//
+//                            PredictBloodPressureRequest predictBloodPressureRequest = new PredictBloodPressureRequest();
+//
+//                            predictBloodPressureRequest.setUserName(editUsername.getText().toString());
+//                            predictBloodPressureRequest.setSystolic(Integer.parseInt(sysBP.getText().toString()));
+//                            predictBloodPressureRequest.setDiastolic(Integer.parseInt(diaBP.getText().toString()));
+//                            predictBloodPressureRequest.setHeartRate(Integer.parseInt(heartRate.getText().toString()));
+//                            predictBloodPressureRequest.setReadingTime(datetime);
+//                            createPredictedBP(predictBloodPressureRequest);
+//                        }
+//                    }
+//                });
+//            }
+//        }
+    }
 
-                            predictBloodPressureRequest.setUserName(editUsername.getText().toString());
-                            predictBloodPressureRequest.setSystolic(Integer.parseInt(sysBP.getText().toString()));
-                            predictBloodPressureRequest.setDiastolic(Integer.parseInt(diaBP.getText().toString()));
-                            predictBloodPressureRequest.setHeartRate(Integer.parseInt(heartRate.getText().toString()));
-                            predictBloodPressureRequest.setReadingTime(datetime);
-                            createPredictedBP(predictBloodPressureRequest);
-                        }
-                    }
-                });
+    private Patient findPatient(RealmResults<Patient> realmObjects, String usernameString) {
+        for(Patient patient: realmObjects){
+            if(patient.getUsername().equals(usernameString)){
+                return patient; //patient found
             }
         }
+        return null; //patient not found
     }
 
     public void addBloodpress(Patient myRealmObject){
@@ -249,7 +263,7 @@ public class UserProfile extends AppCompatActivity {
         final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         String datetime = dateformat.format(c.getTime());
 
-        final BloodPressureAPI post = new BloodPressureAPI( s1,
+        final BloodPressureAPI post = new BloodPressureAPI(usernameString,
                                                             Integer.parseInt(sysBP.getText().toString()),
                                                             Integer.parseInt(diaBP.getText().toString()),
                                                             Integer.parseInt(heartRate.getText().toString()),
@@ -259,7 +273,7 @@ public class UserProfile extends AppCompatActivity {
             @Override
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
                 Toast.makeText(UserProfile.this, response.message(), Toast.LENGTH_LONG).show();
-
+                viewChart();
             }
 
             @Override
@@ -294,7 +308,7 @@ public class UserProfile extends AppCompatActivity {
                 List<BloodPressureAPI> bloodPressureList =  response.body();
 
                 for(BloodPressureAPI bloodPressure : bloodPressureList){
-                    if(bloodPressure.getUserName().equals(s1)){
+                    if(bloodPressure.getUserName().equals(usernameString)){
                         systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
                     }
                 }
@@ -306,66 +320,66 @@ public class UserProfile extends AppCompatActivity {
                 LineData data = new LineData(dataSets);
                 mChart.setData(data);
                 mChart.invalidate();
-
-                //--------------DIASTOLIC------------------
-                mChart2.setDragEnabled(true);
-                mChart2.setScaleEnabled(false);
-                mChart2.invalidate();
-
-                XAxis xAxis2 = mChart2.getXAxis();
-                xAxis2.setPosition(XAxis.XAxisPosition.BOTTOM);
-                xAxis2.setLabelRotationAngle(90);
-                xAxis2.setValueFormatter(new MyAxisValueFormatter());
-
-                ArrayList<Entry> diastolic = new ArrayList<Entry>();
-//                ArrayList<Entry> predictedD = new ArrayList<Entry>();
-
-                int hour2 = 0;
-
-                List<BloodPressureAPI> bloodPressureList2 =  response.body();
-                for(BloodPressureAPI bloodPressure : bloodPressureList2){
-                    if(bloodPressure.getUserName().equals(s1)){
-                        diastolic.add(new Entry(hour2++, bloodPressure.getDiastolic() ));
-                    }
-                }
-
-//                predictedD.add(new Entry(hour2++, predDia));
-
-                LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
-//                LineDataSet lineDataSet22 = new LineDataSet(predictedD, "Predicted Diastolic");
-
-                ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
-                dataSets2.add(lineDataSet2);
-//                dataSets2.add(lineDataSet22);
-
-                LineData data2 = new LineData(dataSets2);
-                mChart2.setData(data2);
-                mChart2.invalidate();
-                //--------------------------------
-                mChart3.setDragEnabled(true);
-                mChart3.setScaleEnabled(false);
-                mChart3.invalidate();
-
-                XAxis xAxis3 = mChart3.getXAxis();
-                xAxis3.setPosition(XAxis.XAxisPosition.BOTTOM);
-
-                ArrayList<Entry> bloodp = new ArrayList<Entry>();
-
-                List<BloodPressureAPI> bloodPressureList3 =  response.body();
-
-                for(BloodPressureAPI bloodPressure : bloodPressureList3){
-                    if(bloodPressure.getUserName().equals(s1)){
-                        bloodp.add(new Entry(bloodPressure.getDiastolic(),bloodPressure.getSystolic() ));
-                    }
-                }
-
-                LineDataSet lineDataSet3 = new LineDataSet(bloodp, "Current Blood Pressure");
-                ArrayList<ILineDataSet> dataSets3 = new ArrayList<>();
-                dataSets3.add(lineDataSet3);
-
-                LineData data3 = new LineData(dataSets3);
-                mChart3.setData(data3);
-                mChart3.invalidate();
+//
+//                //--------------DIASTOLIC------------------
+//                mChart2.setDragEnabled(true);
+//                mChart2.setScaleEnabled(false);
+//                mChart2.invalidate();
+//
+//                XAxis xAxis2 = mChart2.getXAxis();
+//                xAxis2.setPosition(XAxis.XAxisPosition.BOTTOM);
+//                xAxis2.setLabelRotationAngle(90);
+//                xAxis2.setValueFormatter(new MyAxisValueFormatter());
+//
+//                ArrayList<Entry> diastolic = new ArrayList<Entry>();
+////                ArrayList<Entry> predictedD = new ArrayList<Entry>();
+//
+//                int hour2 = 0;
+//
+//                List<BloodPressureAPI> bloodPressureList2 =  response.body();
+//                for(BloodPressureAPI bloodPressure : bloodPressureList2){
+//                    if(bloodPressure.getUserName().equals(s1)){
+//                        diastolic.add(new Entry(hour2++, bloodPressure.getDiastolic() ));
+//                    }
+//                }
+//
+////                predictedD.add(new Entry(hour2++, predDia));
+//
+//                LineDataSet lineDataSet2 = new LineDataSet(diastolic, "Current Diastolic");
+////                LineDataSet lineDataSet22 = new LineDataSet(predictedD, "Predicted Diastolic");
+//
+//                ArrayList<ILineDataSet> dataSets2 = new ArrayList<>();
+//                dataSets2.add(lineDataSet2);
+////                dataSets2.add(lineDataSet22);
+//
+//                LineData data2 = new LineData(dataSets2);
+//                mChart2.setData(data2);
+//                mChart2.invalidate();
+//                //--------------------------------
+//                mChart3.setDragEnabled(true);
+//                mChart3.setScaleEnabled(false);
+//                mChart3.invalidate();
+//
+//                XAxis xAxis3 = mChart3.getXAxis();
+//                xAxis3.setPosition(XAxis.XAxisPosition.BOTTOM);
+//
+//                ArrayList<Entry> bloodp = new ArrayList<Entry>();
+//
+//                List<BloodPressureAPI> bloodPressureList3 =  response.body();
+//
+//                for(BloodPressureAPI bloodPressure : bloodPressureList3){
+//                    if(bloodPressure.getUserName().equals(s1)){
+//                        bloodp.add(new Entry(bloodPressure.getDiastolic(),bloodPressure.getSystolic() ));
+//                    }
+//                }
+//
+//                LineDataSet lineDataSet3 = new LineDataSet(bloodp, "Current Blood Pressure");
+//                ArrayList<ILineDataSet> dataSets3 = new ArrayList<>();
+//                dataSets3.add(lineDataSet3);
+//
+//                LineData data3 = new LineData(dataSets3);
+//                mChart3.setData(data3);
+//                mChart3.invalidate();
             }
 
             @Override

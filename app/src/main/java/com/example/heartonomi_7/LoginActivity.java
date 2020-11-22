@@ -18,6 +18,8 @@ import com.example.heartonomi_7.Model.Patient;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import io.realm.Realm;
 import io.realm.RealmResults;
@@ -39,12 +41,18 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.login_page);
 
+
         realm = Realm.getDefaultInstance();
 
         editUsername = findViewById(R.id.username);
         editPassword = findViewById(R.id.password);
         btnLogin = findViewById(R.id.btn_Login);
         btnSignup = findViewById(R.id.btn_Signup);
+
+        //for testing purpose
+        editUsername.setText("jun707");
+        editPassword.setText("jun123");
+
 
         btnSignup.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -103,23 +111,45 @@ public class LoginActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<List<LoginResponse>> call, Response<List<LoginResponse>> response) {
                 if(response.isSuccessful()){
-                    List<LoginResponse> loginResponse = response.body();
-                    for (LoginResponse user : loginResponse) {
-                            String username = loginRequest.getUsername();
-                            String password = loginRequest.getPassword();
-                            if(user.getUsername().equals(username) && user.getPassword().equals(password)){
-                                startActivity(new Intent(LoginActivity.this,UserProfile.class).putExtra("username",username));
-                            finish();
-                            break;
-                            }else{
-                                Toast.makeText(LoginActivity.this, "Username/password incorrect", Toast.LENGTH_LONG).show();
-                            }
+                    //Fetch the text input that user entered
+                    final String inputUserName = loginRequest.getUsername();
+                    final String inputPassword = loginRequest.getPassword();
+                    //list of users retrieved from the server
+                    List<LoginResponse> userList = response.body();  //'LoginResponse' is actually just Patient model
+                    LoginResponse foundUser = null;
+                    boolean passwordCorrect = false;
+
+                    //loop through the entire list to find the user
+                    for(LoginResponse user : userList){
+                        if(user.getUsername().equals(inputUserName)){
+                            foundUser = user;
+                            passwordCorrect = user.getPassword().equals(inputPassword); //Check the password while we are at it
+                            break; //We're done. no need to continue looping.
+                        }
                     }
-                    //finish();
+
+                    //check whether password is correct
+
+
+                    //if user is found and password is correct then start the userprofile activity
+                    if(foundUser != null && passwordCorrect){
+                        Intent userProfileIntent = new Intent(LoginActivity.this,UserProfile.class);
+                        //so that you don't go back to back button when you press login
+                        userProfileIntent.setFlags(userProfileIntent.getFlags() | Intent.FLAG_ACTIVITY_NO_HISTORY);
+                        userProfileIntent.putExtra("username", foundUser.getName());
+                        startActivity(userProfileIntent); //
+                        finish();
+                        Toast.makeText(LoginActivity.this, "Login Successful", Toast.LENGTH_SHORT).show();
+                    }else {
+                        Toast.makeText(LoginActivity.this, "Username/password incorrect", Toast.LENGTH_LONG).show();
+                    }
+
+
                 }else{
                     String message = "Error has occured";
                     Toast.makeText(LoginActivity.this, message, Toast.LENGTH_LONG).show();
                 }
+
             }
 
             @Override
