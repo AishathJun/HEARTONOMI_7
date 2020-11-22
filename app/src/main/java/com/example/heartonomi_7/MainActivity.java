@@ -76,9 +76,10 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(MainActivity.this, "Enter height", Toast.LENGTH_LONG).show();
                     editHeight.requestFocus();
                 } else {
+                    createPatient();
 
-                    try{
-                        createPatient();
+//                    try{
+
 //                        realm.beginTransaction();
 //                        user = realm.createObject(Patient.class);
 //                        user.setName(editName.getText().toString());
@@ -89,10 +90,10 @@ public class MainActivity extends AppCompatActivity {
 //                        realm.commitTransaction();
 //                        Toast.makeText(MainActivity.this, "Success", Toast.LENGTH_LONG).show();
 
-                    } catch (RealmPrimaryKeyConstraintException e){
-                        e.printStackTrace();
-                        Toast.makeText(MainActivity.this, "Fail", Toast.LENGTH_LONG).show();
-                    }
+//                    } catch (RealmPrimaryKeyConstraintException e){
+//                        e.printStackTrace();
+//                        Toast.makeText(MainActivity.this, "Fail", Toast.LENGTH_LONG).show();
+//                    }
                 }
             }
         });

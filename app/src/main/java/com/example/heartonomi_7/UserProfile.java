@@ -1,10 +1,12 @@
 package com.example.heartonomi_7;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -43,10 +45,12 @@ public class UserProfile extends AppCompatActivity {
     private Realm realm;
     private Patient currentPatient;
     Button btn_Logout, btn_Submit;
-    TextView editUsername, patientNameLabel;
+    TextView labelUsername, labelFullname;
     EditText sysBP, diaBP, heartRate;
     LoginResponse loginResponse;
-    String usernameString;
+    //String usernameString;
+
+    List<BloodPressureAPI> userBloodPressure;  //blood pressure data belonging to the user
 
     int predSys, predDia;
     private JsonPlaceHolderApiBP bpService;
@@ -55,12 +59,15 @@ public class UserProfile extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.user_profile_page);
 
+        //module variable
+        userBloodPressure = new ArrayList<>();
+
         mChart = (LineChart) findViewById(R.id.Linechart);
         mChart2 = (LineChart) findViewById(R.id.Linechart2);
         mChart3 = (LineChart) findViewById(R.id.Linechart3);
 
-        editUsername = findViewById(R.id.u_username);
-        patientNameLabel = findViewById(R.id.fname);
+        labelUsername = findViewById(R.id.u_username);  //renamed it from editUsername
+        labelFullname = findViewById(R.id.fname);       //renamed this one
         btn_Submit = findViewById(R.id.btnSubmit);
         btn_Logout = findViewById(R.id.btnlogout);
 
@@ -77,35 +84,39 @@ public class UserProfile extends AppCompatActivity {
         //this. it does the same thing
         bpService = ApiClient.getBPService(); //renamed jsonPlaceholdeApiBP to bpService.
 
+        //fetch the all the user data from the login activity. We dont need realm.
         Intent i = getIntent();
+        final String usernameString;
         usernameString =  i.getStringExtra("username");
-        editUsername.setText(usernameString);
+        String name = i.getStringExtra("name");
+        String password = i.getStringExtra("password");
+        String height = i.getStringExtra("height");
+        String weight= i.getStringExtra("weight");
 
-        realm = Realm.getDefaultInstance();
-        RealmResults<Patient> realmObjects = realm.where(Patient.class).findAll();
-        currentPatient = findPatient(realmObjects, usernameString);
+        currentPatient = new Patient(name, usernameString, password, weight, height);
 
-        if(currentPatient != null) { //we found the patient in realm database
-            patientNameLabel.setText(currentPatient.getName());
 
-            //Code below will be  executed if the user click button to create a new reading
-            btn_Submit.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
-                            Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
-                        }else{
-                            createBP();
-                            //viewChart();
-                        }
+        //Set the text data for UI
+        labelUsername.setText(usernameString);
+        labelFullname.setText(currentPatient.getName());
+
+
+        btn_Submit.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
+                        Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
+                    }else{
+                        //success!!
+                        hideKeyboard(); //hide the annoying keyboard.
+
+                        createBP(usernameString);
+                        //viewChart();
                     }
-                });
+                }
+            });
 
-        } else {  // The patient was not found in the database. I'm not sure what should happen here
-            //I don't know what to call this. We should probably throw an exception
-            Toast.makeText(this, "Sorry. Internal error occured.", Toast.LENGTH_SHORT).show();
-            Log.e("UserProfile", "onCreate: realm object not found");
-        }
+
 //        for (final Patient myRealmObject : realmObjects) {
 //            if (s1.equals(myRealmObject.getUsername())) {
 //                editName.setText(myRealmObject.getName());
@@ -138,18 +149,46 @@ public class UserProfile extends AppCompatActivity {
 //        }
     }
 
+    //hide keyboard to fix that annoying issue with keyboard still visible after submit
+    private void hideKeyboard(){
+        Context context = this.getApplicationContext();
+        InputMethodManager inputManager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+        inputManager.hideSoftInputFromWindow(this.getCurrentFocus().getWindowToken(),InputMethodManager.HIDE_NOT_ALWAYS);
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
+        fetchPatientBloodPressure(currentPatient.getUsername());
 
         //Ask server for list of blood pressure and process them once received.
+
+    }
+
+
+    /**
+     * Ask the server for a list of blood pressure and adds the blood pressure data
+     * belongin to patient in the module variable 'userBloodPressure'
+     * @param username
+     */
+    void fetchPatientBloodPressure(final String username){
         bpService.getBP().enqueue(new Callback<List<BloodPressureAPI>>() {
             @Override
             public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {
                 List<BloodPressureAPI> bloodPressureList = response.body();
-                List<BloodPressureAPI> userBloodPressure; //BP readings belonging to the user
+                //List<BloodPressureAPI> userBloodPressure; //BP readings belonging to the user
 
+                //clear the module variable that stores blood pressure objects
+                userBloodPressure.clear();
 
+                //We search through the blood pressure list and add the blood pressure belonging to the user to module list
+                for(BloodPressureAPI bp : bloodPressureList){
+                    if(bp.getUserName().equals(username)){
+                        userBloodPressure.add(bp);
+                    }
+                }
+
+                renderCharts();
                 Log.v("server list size", "="+ bloodPressureList.size());
             }
 
@@ -160,6 +199,41 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
+    void renderCharts(){
+        drawChart(mChart, "Current Systolic");
+    }
+
+    void drawChart(LineChart chart, String chartLabel){
+        chart.setDragEnabled(true);
+        chart.setScaleEnabled(false);
+        chart.invalidate();
+
+        XAxis xAxis = chart.getXAxis();
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+        xAxis.setLabelRotationAngle(90);
+        xAxis.setValueFormatter(new MyAxisValueFormatter());
+
+        ArrayList<Entry> systolic = new ArrayList<Entry>();
+        int hour1 = 0;
+        for(BloodPressureAPI bloodPressure : userBloodPressure){
+            systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
+        }
+
+        LineDataSet lineDataSet1 = new LineDataSet(systolic, chartLabel);
+        ArrayList<ILineDataSet> dataSets = new ArrayList<>();
+        dataSets.add(lineDataSet1);
+
+        LineData data = new LineData(dataSets);
+        chart.setData(data);
+        chart.invalidate();
+    }
+
+    /**
+     * Find a patient from a list of patients by username
+     * @param realmObjects
+     * @param usernameString
+     * @return
+     */
     private Patient findPatient(RealmResults<Patient> realmObjects, String usernameString) {
         for(Patient patient: realmObjects){
             if(patient.getUsername().equals(usernameString)){
@@ -301,7 +375,7 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
-    private void createBP(){
+    private void createBP(String usernameString){
         Date c = Calendar.getInstance().getTime();
         final SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         String datetime = dateformat.format(c.getTime());
@@ -317,7 +391,7 @@ public class UserProfile extends AppCompatActivity {
             @Override
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
                 Toast.makeText(UserProfile.this, response.message(), Toast.LENGTH_LONG).show();
-                viewChart();
+                //viewChart();
             }
 
             @Override
@@ -327,7 +401,7 @@ public class UserProfile extends AppCompatActivity {
         });
     }
 
-    private void viewChart(){
+    private void viewChart(String usernameString){
         Call<List<BloodPressureAPI>> call = bpService.getBP();
         call.enqueue(new Callback<List<BloodPressureAPI>>() {
             @Override
@@ -352,9 +426,9 @@ public class UserProfile extends AppCompatActivity {
                 List<BloodPressureAPI> bloodPressureList =  response.body();
 
                 for(BloodPressureAPI bloodPressure : bloodPressureList){
-                    if(bloodPressure.getUserName().equals(usernameString)){
-                        systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
-                    }
+                   // if(bloodPressure.getUserName().equals(usernameString)){
+                    //    systolic.add(new Entry(hour1++, bloodPressure.getSystolic() ));
+                   // }
                 }
 
                 LineDataSet lineDataSet1 = new LineDataSet(systolic, "Current Systolic");

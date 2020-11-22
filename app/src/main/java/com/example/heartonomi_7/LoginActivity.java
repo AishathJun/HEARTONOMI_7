@@ -136,7 +136,14 @@ public class LoginActivity extends AppCompatActivity {
                         Intent userProfileIntent = new Intent(LoginActivity.this,UserProfile.class);
                         //so that you don't go back to back button when you press login
                         userProfileIntent.setFlags(userProfileIntent.getFlags() | Intent.FLAG_ACTIVITY_NO_HISTORY);
-                        userProfileIntent.putExtra("username", foundUser.getName());
+
+                        //send all of these data so that we can get rid of realm
+                        userProfileIntent.putExtra("name", foundUser.getName());
+                        userProfileIntent.putExtra("username", foundUser.getUsername());
+                        userProfileIntent.putExtra("height", foundUser.getHeight());
+                        userProfileIntent.putExtra("weight", foundUser.getWeight());
+                        userProfileIntent.putExtra("password", foundUser.getPassword());
+
                         startActivity(userProfileIntent); //
                         finish();
                         Toast.makeText(LoginActivity.this, "Login Successful", Toast.LENGTH_SHORT).show();
