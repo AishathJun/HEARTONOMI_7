@@ -2,7 +2,9 @@ package com.example.heartonomi_7;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -35,8 +37,6 @@ import io.realm.RealmResults;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 public class UserProfile extends AppCompatActivity {
     private LineChart mChart, mChart2, mChart3;
@@ -49,7 +49,7 @@ public class UserProfile extends AppCompatActivity {
     String usernameString;
 
     int predSys, predDia;
-    private JsonPlaceHolderApiBP jsonPlaceHolderApiBP;
+    private JsonPlaceHolderApiBP bpService;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,11 +68,14 @@ public class UserProfile extends AppCompatActivity {
         diaBP = findViewById(R.id.diastolic);
         heartRate = findViewById(R.id.heartrate);
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://192.168.0.180:8080/api/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
-        jsonPlaceHolderApiBP = retrofit.create(JsonPlaceHolderApiBP.class);
+        //replace these lines with...
+//        Retrofit retrofit = new Retrofit.Builder()
+//                .baseUrl("http://192.168.0.180:8000/api/")
+//                .addConverterFactory(GsonConverterFactory.create())
+//                .build();
+//        jsonPlaceHolderApiBP = retrofit.create(JsonPlaceHolderApiBP.class);
+        //this. it does the same thing
+        bpService = ApiClient.getBPService(); //renamed jsonPlaceholdeApiBP to bpService.
 
         Intent i = getIntent();
         usernameString =  i.getStringExtra("username");
@@ -82,8 +85,26 @@ public class UserProfile extends AppCompatActivity {
         RealmResults<Patient> realmObjects = realm.where(Patient.class).findAll();
         currentPatient = findPatient(realmObjects, usernameString);
 
-        if(currentPatient != null){ //we found the patient in realm database
+        if(currentPatient != null) { //we found the patient in realm database
             patientNameLabel.setText(currentPatient.getName());
+
+            //Code below will be  executed if the user click button to create a new reading
+            btn_Submit.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if(TextUtils.isEmpty(sysBP.getText().toString()) || TextUtils.isEmpty(diaBP.getText().toString()) || TextUtils.isEmpty(heartRate.getText().toString())){
+                            Toast.makeText(UserProfile.this,"Systolic / Diastolic / Heart rate Required", Toast.LENGTH_LONG).show();
+                        }else{
+                            createBP();
+                            //viewChart();
+                        }
+                    }
+                });
+
+        } else {  // The patient was not found in the database. I'm not sure what should happen here
+            //I don't know what to call this. We should probably throw an exception
+            Toast.makeText(this, "Sorry. Internal error occured.", Toast.LENGTH_SHORT).show();
+            Log.e("UserProfile", "onCreate: realm object not found");
         }
 //        for (final Patient myRealmObject : realmObjects) {
 //            if (s1.equals(myRealmObject.getUsername())) {
@@ -115,6 +136,28 @@ public class UserProfile extends AppCompatActivity {
 //                });
 //            }
 //        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        //Ask server for list of blood pressure and process them once received.
+        bpService.getBP().enqueue(new Callback<List<BloodPressureAPI>>() {
+            @Override
+            public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {
+                List<BloodPressureAPI> bloodPressureList = response.body();
+                List<BloodPressureAPI> userBloodPressure; //BP readings belonging to the user
+
+
+                Log.v("server list size", "="+ bloodPressureList.size());
+            }
+
+            @Override
+            public void onFailure(Call<List<BloodPressureAPI>> call, Throwable t) {
+
+            }
+        });
     }
 
     private Patient findPatient(RealmResults<Patient> realmObjects, String usernameString) {
@@ -227,7 +270,7 @@ public class UserProfile extends AppCompatActivity {
     }
 
     private void createPredictedBP(final PredictBloodPressureRequest predictBloodPressureRequest){
-        final Call<PredictBloodPressureResponse> predictBloodPressureRequestCall = jsonPlaceHolderApiBP.displayPredict(predictBloodPressureRequest);
+        final Call<PredictBloodPressureResponse> predictBloodPressureRequestCall = bpService.displayPredict(predictBloodPressureRequest);
         predictBloodPressureRequestCall.enqueue(new Callback<PredictBloodPressureResponse>() {
             @Override
             public void onResponse(Call<PredictBloodPressureResponse> call, Response<PredictBloodPressureResponse> response) {
@@ -268,7 +311,8 @@ public class UserProfile extends AppCompatActivity {
                                                             Integer.parseInt(diaBP.getText().toString()),
                                                             Integer.parseInt(heartRate.getText().toString()),
                                                             datetime);
-        Call<BloodPressureAPI> call = jsonPlaceHolderApiBP.createBP(post);
+
+        Call<BloodPressureAPI> call = bpService.createBP(post);
         call.enqueue(new Callback<BloodPressureAPI>() {
             @Override
             public void onResponse(Call<BloodPressureAPI> call, Response<BloodPressureAPI> response) {
@@ -284,7 +328,7 @@ public class UserProfile extends AppCompatActivity {
     }
 
     private void viewChart(){
-        Call<List<BloodPressureAPI>> call = jsonPlaceHolderApiBP.getBP();
+        Call<List<BloodPressureAPI>> call = bpService.getBP();
         call.enqueue(new Callback<List<BloodPressureAPI>>() {
             @Override
             public void onResponse(Call<List<BloodPressureAPI>> call, Response<List<BloodPressureAPI>> response) {

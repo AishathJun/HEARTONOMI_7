@@ -14,6 +14,7 @@ public class ApiClient {
 
         OkHttpClient okHttpClient = new OkHttpClient.Builder().addInterceptor(httpLoggingInterceptor).build();
 
+        //replaced "http://192.168.0.180:8000/api/"
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("http://192.168.0.145:8000/api/") //insert the API URL here
                 .addConverterFactory(GsonConverterFactory.create())
@@ -33,5 +34,9 @@ public class ApiClient {
     public static JsonPlaceHolderApi getUserService(){
         JsonPlaceHolderApi userservice = getRetrofit().create(JsonPlaceHolderApi.class);
         return userservice;
+    }
+
+    public static JsonPlaceHolderApiBP getBPService(){
+        return getRetrofit().create(JsonPlaceHolderApiBP.class);
     }
 }

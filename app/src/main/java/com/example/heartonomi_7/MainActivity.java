@@ -16,8 +16,6 @@ import io.realm.exceptions.RealmPrimaryKeyConstraintException;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
     Realm realm;
@@ -30,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
     EditText editHeight;
     Button  btnSignup;
     Button btnLogin;
-    private JsonPlaceHolderApi jsonPlaceHolderApi;
+    private JsonPlaceHolderApi userService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,11 +50,12 @@ public class MainActivity extends AppCompatActivity {
         btnSignup = findViewById(R.id.btn_Signup);
         btnLogin = findViewById(R.id.btn_Login);
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://192.168.0.180:8000/api/") //insert the API URL here
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
-        jsonPlaceHolderApi = retrofit.create(JsonPlaceHolderApi.class);
+//        Retrofit retrofit = new Retrofit.Builder()
+//                .baseUrl("http://192.168.0.180:8000/api/") //insert the API URL here
+//                .addConverterFactory(GsonConverterFactory.create())
+//                .build();
+//        jsonPlaceHolderApi = retrofit.create(JsonPlaceHolderApi.class);
+        userService = ApiClient.getUserService();
 
         btnSignup.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -116,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
     private void createPatient(){
         Patient post = new Patient(editName.getText().toString(),editUsername.getText().toString(),editPassword.getText().toString(),editWeight.getText().toString(),editHeight.getText().toString());
 
-        Call<Patient> call = jsonPlaceHolderApi.createPatient(post);
+        Call<Patient> call = userService.createPatient(post);
         call.enqueue(new Callback<Patient>() {
             @Override
             public void onResponse(Call<Patient> call, Response<Patient> response) {
